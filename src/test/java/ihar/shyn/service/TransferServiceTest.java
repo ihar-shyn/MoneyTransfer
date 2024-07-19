@@ -11,6 +11,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class TransferServiceTest {
 
@@ -42,6 +46,31 @@ public class TransferServiceTest {
         Assertions.assertEquals(accountDao.getAccount(1L).getBalance(), new BigDecimal("200"));
         Assertions.assertEquals(accountDao.getAccount(2L).getBalance(), new BigDecimal("600"));
         Assertions.assertThrows(NoSuchAccountException.class, () -> service.transferMoney(1L, 3L, new BigDecimal("100")));
+    }
+
+    @Test
+    void whenMakeTransfersSimultaneously_thenResultBalanceIsCorrect() throws InterruptedException {
+        accountDao.createAccount(1L, new BigDecimal("1000"));
+        accountDao.createAccount(2L, new BigDecimal("1000"));
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        executor.submit(() -> {
+            for (int i = 0; i < 1000; i++) {
+                service.transferMoney(1L, 2L, new BigDecimal("1"));
+            }
+        });
+
+        executor.submit(() -> {
+            for (int i = 0; i < 500; i++) {
+                service.transferMoney(2L, 1L, new BigDecimal("1"));
+            }
+        });
+
+        executor.shutdown();
+        executor.awaitTermination(30, TimeUnit.SECONDS);
+        Assertions.assertEquals(accountDao.getAccount(1L).getBalance(), new BigDecimal("500"));
+        Assertions.assertEquals(accountDao.getAccount(2L).getBalance(), new BigDecimal("1500"));
+
+
     }
 
 }
