@@ -1,7 +1,5 @@
 package ihar.shyn.dao;
 
-import ihar.shyn.exception.AccountAlreadyExistException;
-import ihar.shyn.exception.InvalidAccountIdException;
 import ihar.shyn.exception.NegativeBalanceException;
 import ihar.shyn.exception.NoSuchAccountException;
 import ihar.shyn.model.Account;
@@ -9,28 +7,24 @@ import ihar.shyn.model.Account;
 import java.math.BigDecimal;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class AccountDaoImpl implements AccountDao{
 
     private final ConcurrentMap<Long, Account> storage = new ConcurrentHashMap<>();
+    private final AtomicLong seq = new AtomicLong(0);
 
     @Override
-    public Account createAccount(Long accountId, BigDecimal initialBalance) {
-        if (accountId < 1L) {
-            throw new InvalidAccountIdException(accountId);
-        }
+    public Account createAccount(BigDecimal initialBalance) {
         if (initialBalance.compareTo(BigDecimal.ZERO) < 0) {
-            throw new NegativeBalanceException(accountId);
+            throw new NegativeBalanceException();
         }
+        long accountId = seq.incrementAndGet();
 
-        synchronized (this) {
-            if (storage.containsKey(accountId)) {
-                throw new AccountAlreadyExistException(accountId);
-            }
-            Account account = new Account(accountId, initialBalance);
-            storage.put(accountId, account);
-            return account;
-        }
+        Account account = new Account(accountId, initialBalance);
+        storage.put(accountId, account);
+
+        return account;
     }
 
     @Override

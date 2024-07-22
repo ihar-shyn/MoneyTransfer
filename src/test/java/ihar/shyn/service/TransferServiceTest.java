@@ -11,7 +11,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -35,42 +34,40 @@ public class TransferServiceTest {
 
     @Test
     void whenMakeTransfer_thenMakeOnlyValidTransfer() {
-        accountDao.createAccount(1L, new BigDecimal("300"));
-        accountDao.createAccount(2L, new BigDecimal("500"));
+        long accountId1 = accountDao.createAccount(new BigDecimal("300")).getId();
+        long accountId2 = accountDao.createAccount(new BigDecimal("500")).getId();
 
-        Assertions.assertThrows(InvalidOperationException.class, () -> service.transferMoney(1L, 1L, new BigDecimal("100")));
-        service.transferMoney(1L, 2L, new BigDecimal("100"));
-        Assertions.assertEquals(accountDao.getAccount(1L).getBalance(), new BigDecimal("200"));
-        Assertions.assertEquals(accountDao.getAccount(2L).getBalance(), new BigDecimal("600"));
-        Assertions.assertThrows(NegativeBalanceException.class, () -> service.transferMoney(2L, 1L, new BigDecimal("1000")));
-        Assertions.assertEquals(accountDao.getAccount(1L).getBalance(), new BigDecimal("200"));
-        Assertions.assertEquals(accountDao.getAccount(2L).getBalance(), new BigDecimal("600"));
-        Assertions.assertThrows(NoSuchAccountException.class, () -> service.transferMoney(1L, 3L, new BigDecimal("100")));
+        Assertions.assertThrows(InvalidOperationException.class, () -> service.transferMoney(accountId1, accountId1, new BigDecimal("100")));
+        service.transferMoney(accountId1, accountId2, new BigDecimal("100"));
+        Assertions.assertEquals(accountDao.getAccount(accountId1).getBalance(), new BigDecimal("200"));
+        Assertions.assertEquals(accountDao.getAccount(accountId2).getBalance(), new BigDecimal("600"));
+        Assertions.assertThrows(NegativeBalanceException.class, () -> service.transferMoney(accountId2, accountId1, new BigDecimal("1000")));
+        Assertions.assertEquals(accountDao.getAccount(accountId1).getBalance(), new BigDecimal("200"));
+        Assertions.assertEquals(accountDao.getAccount(accountId2).getBalance(), new BigDecimal("600"));
+        Assertions.assertThrows(NoSuchAccountException.class, () -> service.transferMoney(accountId1, -1L, new BigDecimal("100")));
     }
 
     @Test
     void whenMakeTransfersSimultaneously_thenResultBalanceIsCorrect() throws InterruptedException {
-        accountDao.createAccount(1L, new BigDecimal("1000"));
-        accountDao.createAccount(2L, new BigDecimal("1000"));
+        long account1ID = accountDao.createAccount(new BigDecimal("1000")).getId();
+        long account2Id = accountDao.createAccount(new BigDecimal("1000")).getId();
         ExecutorService executor = Executors.newFixedThreadPool(2);
         executor.submit(() -> {
             for (int i = 0; i < 1000; i++) {
-                service.transferMoney(1L, 2L, new BigDecimal("1"));
+                service.transferMoney(account1ID, account2Id, new BigDecimal("1"));
             }
         });
 
         executor.submit(() -> {
             for (int i = 0; i < 500; i++) {
-                service.transferMoney(2L, 1L, new BigDecimal("1"));
+                service.transferMoney(account2Id, account1ID, new BigDecimal("1"));
             }
         });
 
         executor.shutdown();
         executor.awaitTermination(30, TimeUnit.SECONDS);
-        Assertions.assertEquals(accountDao.getAccount(1L).getBalance(), new BigDecimal("500"));
-        Assertions.assertEquals(accountDao.getAccount(2L).getBalance(), new BigDecimal("1500"));
-
-
+        Assertions.assertEquals(accountDao.getAccount(account1ID).getBalance(), new BigDecimal("500"));
+        Assertions.assertEquals(accountDao.getAccount(account2Id).getBalance(), new BigDecimal("1500"));
     }
 
 }
